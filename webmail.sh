@@ -1,74 +1,76 @@
 #!/bin/bash
 
-# Prompt for database details
-read -p "Enter the database name: " dbname
-read -p "Enter the database user: " dbuser
-read -sp "Enter the database password: " dbpass
-echo
+# Memastikan script dijalankan sebagai root
+if [ "$(id -u)" != "0" ]; then
+   echo "Script ini harus dijalankan sebagai root" 1>&2
+   exit 1
+fi
 
-# Update and upgrade the system
-apt update -y && apt upgrade -y
+# Meminta inputan dari pengguna
+read -p "Masukkan nama domain (misalnya: contoh.com): " DOMAIN
+read -p "Masukkan password untuk database MySQL (root): " MYSQL_ROOT_PASSWORD
+read -p "Masukkan nama database untuk Roundcube: " ROUNDCUBE_DB
+read -p "Masukkan username database untuk Roundcube: " ROUNDCUBE_USER
+read -p "Masukkan password untuk pengguna database Roundcube: " ROUNDCUBE_PASSWORD
 
-# Install necessary packages
-apt install -y apache2 mariadb-server mariadb-client php php-mysql php-pear php-intl php-mbstring php-xml unzip wget
+# Memperbarui dan menginstal paket yang diperlukan
+apt update
+apt upgrade -y
+apt install -y apache2 mariadb-server mariadb-client php php-mysql php-intl php-mbstring php-xml php-common php-curl php-zip php-pear php-net-socket php-imap wget unzip
 
-# Secure MariaDB installation
-mysql_secure_installation
-
-# Login to MariaDB and create the database and user
-mysql -u root -p <<MYSQL_SCRIPT
-CREATE DATABASE ${dbname};
-CREATE USER '${dbuser}'@'localhost' IDENTIFIED BY '${dbpass}';
-GRANT ALL PRIVILEGES ON ${dbname}.* TO '${dbuser}'@'localhost';
+# Mengonfigurasi MariaDB
+mysql -u root -p$MYSQL_ROOT_PASSWORD <<EOF
+CREATE DATABASE $ROUNDCUBE_DB;
+CREATE USER '$ROUNDCUBE_USER'@'localhost' IDENTIFIED BY '$ROUNDCUBE_PASSWORD';
+GRANT ALL PRIVILEGES ON $ROUNDCUBE_DB.* TO '$ROUNDCUBE_USER'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
-MYSQL_SCRIPT
+EOF
 
-# Download and extract Roundcube
+# Mengunduh dan memasang Roundcube
 cd /var/www/html
 wget https://github.com/roundcube/roundcubemail/releases/download/1.6.0/roundcubemail-1.6.0-complete.tar.gz
-tar xvf roundcubemail-1.6.0-complete.tar.gz
+tar -xzf roundcubemail-1.6.0-complete.tar.gz
 mv roundcubemail-1.6.0 roundcube
-cd roundcube
-composer install --no-dev
-
-# Set the correct permissions
 chown -R www-data:www-data /var/www/html/roundcube
 chmod -R 755 /var/www/html/roundcube
 
-# Configure Roundcube
-cp /var/www/html/roundcube/config/config.inc.php.sample /var/www/html/roundcube/config/config.inc.php
-
-# Update the database configuration in Roundcube
-sed -i "s/\(\$config\['db_dsnw'\] = \).*/\1'mysql:\/\/${dbuser}:${dbpass}@localhost\/${dbname}';/" /var/www/html/roundcube/config/config.inc.php
-
-# Create a new virtual host for Roundcube
-cat <<EOF > /etc/apache2/sites-available/roundcube.conf
+# Konfigurasi Apache untuk Roundcube
+cat > /etc/apache2/sites-available/roundcube.conf <<EOF
 <VirtualHost *:80>
-    ServerAdmin admin@yourdomain.com
-    DocumentRoot /var/www/html/roundcube/
-    ServerName yourdomain.com
+    ServerName $DOMAIN
+    DocumentRoot /var/www/html/roundcube
 
     <Directory /var/www/html/roundcube/>
-        Options +FollowSymlinks
+        Options +FollowSymLinks
         AllowOverride All
-        <IfModule mod_php7.c>
-            php_value upload_max_filesize 10M
-            php_value post_max_size 12M
-            php_value memory_limit 64M
-            php_value max_execution_time 3600
-            php_value max_input_time 3600
+        <IfModule mod_dav.c>
+            Dav off
         </IfModule>
+        SetEnv HOME /var/www/html/roundcube
+        SetEnv HTTP_HOME /var/www/html/roundcube
     </Directory>
 
     ErrorLog ${APACHE_LOG_DIR}/roundcube_error.log
     CustomLog ${APACHE_LOG_DIR}/roundcube_access.log combined
+
 </VirtualHost>
 EOF
 
-# Enable the site and necessary Apache modules
+# Mengaktifkan situs dan modifikasi Apache
 a2ensite roundcube.conf
 a2enmod rewrite
 systemctl restart apache2
 
-echo "Installation and configuration of Roundcube Webmail completed!"
+# Menyelesaikan pengaturan Roundcube
+cd /var/www/html/roundcube
+cp config/config.inc.php.sample config/config.inc.php
+
+# Menambahkan konfigurasi database ke config.inc.php
+sed -i "s#'sql' => '',#'sql' => 'mysql://$ROUNDCUBE_USER:$ROUNDCUBE_PASSWORD@localhost/$ROUNDCUBE_DB',#" config/config.inc.php
+
+# Menyelesaikan instalasi Roundcube melalui CLI
+php ./bin/installto.sh /var/www/html/roundcube
+
+echo "Instalasi dan konfigurasi Roundcube selesai."
+echo "Silakan akses Webmail di http://$DOMAIN/roundcube"
