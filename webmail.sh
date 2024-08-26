@@ -1,5 +1,8 @@
 #!/bin/bash
-
+# Welcome message
+echo "+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+"
+echo "TKJ Manusa The First and the future of Technology"
+echo "+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+"
 # Memastikan script dijalankan sebagai root
 if [ "$(id -u)" != "0" ]; then
    echo "Script ini harus dijalankan sebagai root" 1>&2
@@ -7,7 +10,7 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 # Meminta inputan dari pengguna
-read -p "Masukkan nama domain (misalnya: contoh.com): " DOMAIN
+read -p "Masukkan nama domain/IP Lokal (misalnya: contoh.com): " DOMAIN
 read -p "Masukkan password untuk database MySQL (root): " MYSQL_ROOT_PASSWORD
 read -p "Masukkan nama database untuk Roundcube: " ROUNDCUBE_DB
 read -p "Masukkan username database untuk Roundcube: " ROUNDCUBE_USER
