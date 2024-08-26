@@ -1,5 +1,5 @@
 # webmail_debian10
-Web Mail 10</P>
+Web Mail Debian 10</P>
 apt update</P>
 apt upgrade</P>
 apt install git</P>
